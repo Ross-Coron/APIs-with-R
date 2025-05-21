@@ -1,1 +1,11 @@
-# APIs-with-R
+# Introduction to getting web data via APIs using R
+
+A short introduction to getting web data via APIs using R and the {httr2} package. In addition to this README, this project's repository contains two files:
+* an R markdown file (.rmd), and
+* an HTML output file (the result of an R Studio knit).
+
+This demonstration uses two publicly available APIs:
+* [UK Parliament](https://developer.parliament.uk/), and
+* [US National Weather Service](https://www.weather.gov/documentation/services-web-api).
+
+Example one has users get information from Parliament's annunciator at a specific timepoint then further information on the speaker at that moment in time. Building on a [tutorial by Albert Rapp](https://albert-rapp.de/posts/web_dev/07_httr2_ultimate_guide/07_httr2), example two has users get weather data for a point in the USA and plot the changing temperature.
