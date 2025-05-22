@@ -1,11 +1,9 @@
 ---
 title: "Getting Data via APIs with R"
 author: "Ross Coron"
-date: "2025-05-21"
+date: "2025-05-22"
 output: html_document
-knit: (function(inputFile, encoding) {
-  rmarkdown::render(inputFile, encoding = encoding, output_file = "index.html")
-})
+knit: (function(inputFile, encoding) {rmarkdown::render(inputFile, encoding = encoding, output_file = "index.html")})
 ---
 
 
