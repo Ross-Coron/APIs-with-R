@@ -1,0 +1,192 @@
+---
+title: "Getting Data via APIs with R"
+author: "Ross Coron"
+date: "2025-05-21"
+output: html_document
+---
+
+
+**About**: This document demonstrates how to get data from a public API with R. In this example, data is retrieved from [Parliaments's public API](https://developer.parliament.uk/) in JSON format using the [httr2 package](https://httr2.r-lib.org/).
+
+<br>
+
+## Background
+
+**Application Programming Interfaces** (APIs) are powerful tools that enable communication between different software systems. In the context of the web, APIs allow users to access structured information from websites without manually scraping or copying content. By making requests to an API, users can efficiently retrieve data in formats easily read by a computer. 
+
+One common format is **JavaScript Object Notation** (JSON) - a lightweight and flexible data format. JSON represents data as key-value pairs and supports nested structures, allowing for complex yet well-organized data sets. Below is an example of data in JSON format:
+
+```
+{
+  "name": "Kier Starmer",
+  "role": "Prime Minister",
+  "address": {
+    "street": "10 Downing Street",
+    "city": "London",
+    "postcode": "SW1A 2AA"
+  },
+  "hobbies": ["politics", "football"]
+}
+```
+<br>
+
+## Getting Started
+
+### httr2
+
+This example uses R's [httr2 package](https://httr2.r-lib.org/). The package helps users send and handle HTTP requests, making it easier to interact with APIs and web services. It provides tools for authentication, request building, response parsing, and error handling.
+
+```{r message=FALSE, warning=FALSE}
+
+library(httr2)
+library(dplyr)
+
+```
+
+
+### Base URL
+
+Parliament has a number of APIs. We will use two - one for Parliament's annunciator system (the screens around Parliament showing what is happening in its two chambers) and one which provides information on MPs and Lords. The URLs for both APIs begin https://now-api.parliament.uk/api/. By appending this base URL, we can retrieve different information.
+
+```{r}
+
+# Set base URL
+base_url <- 'https://now-api.parliament.uk/api/'
+
+```
+
+<br>
+
+## Annunciator API
+
+### Appending the base URL and making a request
+
+By reading the annunciator API's documentation, we can see the base URL should be appended with /Message/message/{annunciator}/{date}. {annunciator} can be substituted with "CommonsMain" or "LordsMain" for the Commons and Lords chamber respectively, and {date} can accept "current" for the live status or a specific date and time in ISO 8601 format (e.g. "2025-05-21T09:38:00Z"). The following URL would provide information on what was happening in the House of Lords chamber at 15:00 on 20 May 2025: https://now-api.parliament.uk/api/Message/message/LordsMain/2025-05-20T15:00:00Z. By clicking the link, you can see the data returned by the web page in JSON format.
+
+Using the httr2 package, we append the URL with these fields, make an HTTP request, and retrieve the data. If successful, a status of 200 (OK) should be contained in the response (parl_response$status)
+
+```{r}
+
+# Appends the URL, makes a request, and retrieves data
+parl_response <- request(base_url) |>
+  req_url_path_append(
+    '/Message/message',
+    'LordsMain',
+    '2025-05-20T15:00:00Z'
+  ) |> req_perform()
+
+glimpse(parl_response)
+
+```
+
+### Converting JSON to an R object
+
+req_perform returns the server's response as an httr2_response object. We convert the content of this response (currently in JSON format) to an R object the using resp_body_json() function:
+
+
+```{r}
+
+parl_response_processed <- parl_response |>
+  resp_body_json() |>
+  glimpse()
+
+```
+
+
+### Extracting data
+
+The retrieved data contains a lot of fields. In this example, we are interested in the Peer speaking in the Chamber at the defined time and their unique ID. By exploring the data and reading the API's documentation, we can dive into the data and extract these fields as such:
+
+```{r}
+peer_name <- parl_response_processed[["slides"]][[1]][["lines"]][[2]][["member"]][["nameFullTitle"]]
+peer_id <- parl_response_processed[["slides"]][[1]][["lines"]][[2]][["member"]][["id"]]
+
+cat("Name: ", peer_name, ". ID: ", peer_id, ".", sep ="")
+
+```
+
+The `pluck()` function provides an alternative, safer way to extract this information e.g.: `pluck(parl_response_processed, "slides", 1, "lines", 2, "member", "id", .default = "Value not found")`.
+
+
+<br>
+
+## Member API
+
+Using this unique ID, we can get further information on the Peer using the members API. As per the API's documentation, there are ~20 API routes available each beginning `https://members-api.parliament.uk/api/Members`. The route `{id}/WrittenQuestions` takes a unique ID and returns a list of written questions tabled by the member.
+
+```{r}
+
+member_base_url <- "https://members-api.parliament.uk/api/Members"
+
+questions <- request(member_base_url) |>
+  req_url_path_append(
+    as.character(peer_id), 
+    'WrittenQuestions'
+  ) |>
+  req_perform() |>
+  resp_body_json() 
+
+total_questions <- questions$totalResults
+  
+cat(peer_name, "has asked", total_questions, "Parliamentary questions.")
+
+```
+<br>
+
+## Further example: plotting data from an API
+
+In this example, weather data is retrieved from the US's National Weather Service API. The data (time course data for Washington DC) is retrieved using httr2, processed using tidyverse, and plotted using ggplot2.
+
+```{r message=FALSE, warning=FALSE}
+
+library(httr2)
+library(tidyverse)
+library(ggplot2)
+
+# Set base URL
+NWS_base_url <- 'https://api.weather.gov'
+
+# Append base URL, make request, retrieve data, convert to R object, extract URL
+forecast_url <- request(NWS_base_url) |>
+  req_url_path_append(
+    'points',
+    '38.8894,-77.0352'
+  ) |> req_perform() |>
+  resp_body_json() |>
+  pluck('properties', 'forecastHourly')
+
+# Create and perform a new request using extracted URL
+forecast <- request(forecast_url) |>
+  req_perform() |>
+  resp_body_json() |>
+
+  # Extracts time course data
+  pluck('properties', 'periods') |>
+  
+  # Convert list into a structured data frame with columns for time, temp, etc.
+  map_dfr(
+    \(x) {
+      tibble(
+        time = x |> pluck('startTime'),
+        temp_F = x |> pluck('temperature'),
+        rain_prob = x |> pluck('probabilityOfPrecipitation', 'value'),
+        forecast = x |> pluck('shortForecast')
+      )
+    }
+  ) |>
+  
+  # Changes time value (as exists) into a properly formatted date-time object
+  mutate(
+    time = time |> ymd_hms()
+  )
+
+# Plot data
+ggplot(forecast, aes(x = time, y = temp_F)) +
+  geom_line(color = "blue") +
+  labs(title = "Washington DC Temperature",
+       x = "Date",
+       y = "Temperature (°F)") +
+  theme_minimal()
+```
+
+
