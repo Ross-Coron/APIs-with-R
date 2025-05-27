@@ -1,13 +1,13 @@
 ---
 title: "Getting Data via APIs with R"
 author: "Ross Coron"
-date: "2025-05-23"
+date: "2025-05-27"
 output: html_document
 knit: (function(inputFile, encoding) {rmarkdown::render(inputFile, encoding = encoding, output_file = "index.html")})
 ---
 
 
-**About**: This document demonstrates how to get data from a public API with R. In this example, data is retrieved from [Parliaments's public API](https://developer.parliament.uk/) in JSON format using the [httr2 package](https://httr2.r-lib.org/).
+**About**: This document demonstrates how to get data from a public API with R. In this example, data is retrieved from [Parliaments's API](https://developer.parliament.uk/) in JSON format using the [httr2 package](https://httr2.r-lib.org/).
 
 <br>
 
@@ -39,6 +39,7 @@ This example uses R's [httr2 package](https://httr2.r-lib.org/). The package hel
 
 ```{r message=FALSE, warning=FALSE}
 
+# Load libraries into memory
 library(httr2)
 library(dplyr)
 
@@ -62,9 +63,11 @@ base_url <- 'https://now-api.parliament.uk/api/'
 
 ### Appending the base URL and making a request
 
-By reading the annunciator API's documentation, we can see the base URL should be appended with /Message/message/{annunciator}/{date}. {annunciator} can be substituted with "CommonsMain" or "LordsMain" for the Commons and Lords chamber respectively, and {date} can accept "current" for the live status or a specific date and time in ISO 8601 format (e.g. "2025-05-21T09:38:00Z"). The following URL would provide information on what was happening in the House of Lords chamber at 15:00 on 20 May 2025: https://now-api.parliament.uk/api/Message/message/LordsMain/2025-05-20T15:00:00Z. By clicking the link, you can see the data returned by the web page in JSON format.
+By reading the [annunciator API's documentation](https://now-api.parliament.uk/index.html), we can see the base URL should be appended with /Message/message/{annunciator}/{date}. {annunciator} can be substituted with "CommonsMain" or "LordsMain" for the Commons and Lords chamber respectively, and {date} can accept "current" for the live status or a specific date and time in ISO 8601 format (e.g. "2025-05-21T09:38:00Z"). 
 
-Using the httr2 package, we append the URL with these fields, make an HTTP request, and retrieve the data. If successful, a status of 200 (OK) should be contained in the response (parl_response$status)
+For example, the following URL would provide information on what was happening in the House of Lords chamber at 15:00 on 20 May 2025: https://now-api.parliament.uk/api/Message/message/LordsMain/2025-05-20T15:00:00Z. By clicking the link, you can see the data returned by the web page in JSON format. Tip: if viewing this data in Microsoft Edge, ticking 'pretty-print' (top left), shows the returned data in a more readible format.
+
+Using the httr2 package, we append the URL with these fields, make an HTTP request, and retrieve the data. If successful, a status of 200 (OK) should be contained in the response (parl_response$status).
 
 ```{r}
 
@@ -76,9 +79,12 @@ parl_response <- request(base_url) |>
     '2025-05-20T15:00:00Z'
   ) |> req_perform()
 
+# View response
 glimpse(parl_response)
 
 ```
+In the response object above, a status code of 200 (OK) can in the {status_code} variable. The desired data exists as non-human readable raw bytes in the {body} variable. Before doing anything with this data, we must first convert it.
+
 
 ### Converting JSON to an R object
 
