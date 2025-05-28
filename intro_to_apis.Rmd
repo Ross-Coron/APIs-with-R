@@ -1,17 +1,24 @@
 ---
-title: "Getting Data via APIs with R"
+title: "Getting Data via Web APIs with R"
 author: "Ross Coron"
-date: "2025-05-27"
-output: html_document
+date: "2025-05-28"
+output: 
+  html_document:
+    toc: true
+status: Draft
 knit: (function(inputFile, encoding) {rmarkdown::render(inputFile, encoding = encoding, output_file = "index.html")})
 ---
 
-
-**About**: This document demonstrates how to get data from a public API with R. In this example, data is retrieved from [Parliaments's API](https://developer.parliament.uk/) in JSON format using the [httr2 package](https://httr2.r-lib.org/).
-
 <br>
 
+**About**: This short document demonstrates how to retrieve structured data from public APIs using R. In this example, we get information about Parliamentarians using [Parliaments's API](https://developer.parliament.uk/) and plot the changing daily temperature in Washington DC using the [National Weather Service's API](https://www.weather.gov/documentation/services-web-api). Both examples use the [httr2 package](https://httr2.r-lib.org/) and retrieve data in JSON format. 
+
+*Note: this document was designed for training purposes, is non-exhaustive, and is in progress.*
+
+***
+
 ## Background
+### APIs and JSON
 
 **Application Programming Interfaces** (APIs) are powerful tools that enable communication between different software systems. In the context of the web, APIs allow users to access structured information from websites without manually scraping or copying content. By making requests to an API, users can efficiently retrieve data in formats easily read by a computer. 
 
@@ -29,48 +36,46 @@ One common format is **JavaScript Object Notation** (JSON) - a lightweight and f
   "hobbies": ["politics", "football"]
 }
 ```
-<br>
-
-## Getting Started
 
 ### httr2
 
-This example uses R's [httr2 package](https://httr2.r-lib.org/). The package helps users send and handle HTTP requests, making it easier to interact with APIs and web services. It provides tools for authentication, request building, response parsing, and error handling.
+The code below uses R's [httr2 package](https://httr2.r-lib.org/). The package helps users send and handle HTTP requests, making it easier to interact with APIs and web services. The package further provides tools for authentication, request building, response parsing, and error handling.
 
 ```{r message=FALSE, warning=FALSE}
-
 # Load libraries into memory
 library(httr2)
 library(dplyr)
-
-```
-
-
-### Base URL
-
-Parliament has a number of APIs. We will use two - one for Parliament's annunciator system (the screens around Parliament showing what is happening in its two chambers) and one which provides information on MPs and Lords. The URLs for both APIs begin https://now-api.parliament.uk/api/. By appending this base URL, we can retrieve different information.
-
-```{r}
-
-# Set base URL
-base_url <- 'https://now-api.parliament.uk/api/'
-
 ```
 
 <br>
 
-## Annunciator API
+***
+## Example 1: Getting Parliamentary data
+
+In this example, we will retrieve information about the Parliamentarian speaking in the main chamber of the House of Commons or House of Lords at a specific point in time.
+
+### Base URL
+
+Parliament has a [number of APIs](https://developer.parliament.uk/). We will use two - one for [Parliament's annunciator system](https://pbs.twimg.com/media/CjJj08kXEAQqVSc?format=jpg&name=900x900) (the screens around Parliament showing what is happening in its two chambers) and one which provides information on MPs and Lords. 
+
+The URLs for both APIs begin `https://now-api.parliament.uk/api/`. By appending this base URL, we can retrieve different information.
+
+```{r}
+# Set base URL
+base_url <- 'https://now-api.parliament.uk/api/'
+```
 
 ### Appending the base URL and making a request
 
-By reading the [annunciator API's documentation](https://now-api.parliament.uk/index.html), we can see the base URL should be appended with /Message/message/{annunciator}/{date}. {annunciator} can be substituted with "CommonsMain" or "LordsMain" for the Commons and Lords chamber respectively, and {date} can accept "current" for the live status or a specific date and time in ISO 8601 format (e.g. "2025-05-21T09:38:00Z"). 
+By reading the [annunciator API's documentation](https://now-api.parliament.uk/index.html), we can see the base URL should be appended with `/Message/message/{annunciator}/{date}`.
 
-For example, the following URL would provide information on what was happening in the House of Lords chamber at 15:00 on 20 May 2025: https://now-api.parliament.uk/api/Message/message/LordsMain/2025-05-20T15:00:00Z. By clicking the link, you can see the data returned by the web page in JSON format. Tip: if viewing this data in Microsoft Edge, ticking 'pretty-print' (top left), shows the returned data in a more readible format.
+`{annunciator}` can be substituted with `CommonsMain` or `LordsMain` for the Commons and Lords chambers respectively. `{date}` can accept `current` for the live status of a chamber or, alternatively, a specific date and time in [ISO 8601 format](https://www.iso.org/iso-8601-date-and-time-format.html) (e.g. `2025-05-21T09:38:00Z`) for its status at that point in time. 
 
-Using the httr2 package, we append the URL with these fields, make an HTTP request, and retrieve the data. If successful, a status of 200 (OK) should be contained in the response (parl_response$status).
+For example, the following URL would provide information on what was happening in the House of Lords Chamber at 15:00 on 20 May 2025: `https://now-api.parliament.uk/api/Message/message/LordsMain/2025-05-20T15:00:00Z`. By clicking this link, you can see the data returned by the URL in JSON format. *Tip: if viewing this data in Microsoft Edge, ticking 'pretty-print' (top left), shows the returned data in a more human-readable format.*
+
+Using the httr2 package, we append the URL with these fields, make an HTTP request, and retrieve the data. If successful, a status of `200 (OK)` should be contained in the request response (in this instance `parl_response$status_code`).
 
 ```{r}
-
 # Appends the URL, makes a request, and retrieves data
 parl_response <- request(base_url) |>
   req_url_path_append(
@@ -81,50 +86,44 @@ parl_response <- request(base_url) |>
 
 # View response
 glimpse(parl_response)
-
 ```
-In the response object above, a status code of 200 (OK) can in the {status_code} variable. The desired data exists as non-human readable raw bytes in the {body} variable. Before doing anything with this data, we must first convert it.
-
+In the response object above, a status code of `200 (OK)` can be seen in the `{status_code}` variable. The data we want to retrieve (i.e. details on the status of the Chamber) exists as non-human readable raw bytes in the `{body}` variable. Before doing anything with this data, we must first convert it to another format.
 
 ### Converting JSON to an R object
 
-req_perform returns the server's response as an httr2_response object. We convert the content of this response (currently in JSON format) to an R object the using resp_body_json() function:
-
+`{req_perform}` above returns the server's response as an `{httr2_response}` object. We convert the content of this response to parsed JSON using the `{resp_body_json()}` function as follows:
 
 ```{r}
-
 parl_response_processed <- parl_response |>
   resp_body_json() |>
   glimpse()
-
 ```
-
 
 ### Extracting data
 
-The retrieved data contains a lot of fields. In this example, we are interested in the Peer speaking in the Chamber at the defined time and their unique ID. By exploring the data and reading the API's documentation, we can dive into the data and extract these fields as such:
+The retrieved data contains a lot of fields. In this example, we are interested in the Peer speaking in the Chamber at the defined time and their unique ID number. By exploring the retrieved information and reading the API's documentation, we can dive into the nested data and extract the contents of these fields as follows:
 
 ```{r}
+# Get Peer name and unique ID
 peer_name <- parl_response_processed[["slides"]][[1]][["lines"]][[2]][["member"]][["nameFullTitle"]]
 peer_id <- parl_response_processed[["slides"]][[1]][["lines"]][[2]][["member"]][["id"]]
 
+# Output name and ID to screen
 cat("Name: ", peer_name, ". ID: ", peer_id, ".", sep ="")
-
 ```
+*Note: the `pluck()` function provides an alternative, safer way to extract this information e.g.: `pluck(parl_response_processed, "slides", 1, "lines", 2, "member", "id", .default = "Value not found")`.*
 
-The `pluck()` function provides an alternative, safer way to extract this information e.g.: `pluck(parl_response_processed, "slides", 1, "lines", 2, "member", "id", .default = "Value not found")`.
+### Member API
 
+Using this unique ID, we can get further information on the Peer using a second API - the [members API](https://members-api.parliament.uk/index.html). As per the API's documentation, there are ~20 API routes available, each beginning `https://members-api.parliament.uk/api/Members`. 
 
-<br>
-
-## Member API
-
-Using this unique ID, we can get further information on the Peer using the members API. As per the API's documentation, there are ~20 API routes available each beginning `https://members-api.parliament.uk/api/Members`. The route `{id}/WrittenQuestions` takes a unique ID and returns a list of written questions tabled by the member.
+The route `{id}/WrittenQuestions` takes a Parliamentarian's unique ID and returns a list of [written questions](https://guidetoprocedure.parliament.uk/collections/pTdLFumO/questions) tabled by that member.
 
 ```{r}
-
+# Set base URL
 member_base_url <- "https://members-api.parliament.uk/api/Members"
 
+# Append base URL, perform request, parse response
 questions <- request(member_base_url) |>
   req_url_path_append(
     as.character(peer_id), 
@@ -133,19 +132,24 @@ questions <- request(member_base_url) |>
   req_perform() |>
   resp_body_json() 
 
+# Get total number of questions from JSON response
 total_questions <- questions$totalResults
-  
+
+# Print Peer name and total number of questions to screen
 cat(peer_name, "has asked", total_questions, "Parliamentary questions.")
 
 ```
+
 <br>
 
-## Further example: plotting data from an API
+***
+## Example 2: plotting weather data from an API
 
-In this example, weather data is retrieved from the US's National Weather Service API. The data (time course data for Washington DC) is retrieved using httr2, processed using tidyverse, and plotted using ggplot2.
+In this second example, weather data is retrieved from the US's National Weather Service API. The data (time course data for Washington DC) is retrieved using httr2, processed using tidyverse, and plotted using ggplot2.
 
 ```{r message=FALSE, warning=FALSE}
 
+# Load required libraries
 library(httr2)
 library(tidyverse)
 library(ggplot2)
@@ -153,7 +157,7 @@ library(ggplot2)
 # Set base URL
 NWS_base_url <- 'https://api.weather.gov'
 
-# Append base URL, make request, retrieve data, convert to R object, extract URL
+# Append base URL, make request, retrieve data, convert to R object, extract associated API URL
 forecast_url <- request(NWS_base_url) |>
   req_url_path_append(
     'points',
@@ -162,15 +166,15 @@ forecast_url <- request(NWS_base_url) |>
   resp_body_json() |>
   pluck('properties', 'forecastHourly')
 
-# Create and perform a new request using extracted URL
+# Create and perform a new request using extracted API URL
 forecast <- request(forecast_url) |>
   req_perform() |>
   resp_body_json() |>
 
-  # Extracts time course data
+  # Extract time course data
   pluck('properties', 'periods') |>
   
-  # Convert list into a structured data frame with columns for time, temp, etc.
+  # Convert list into a structured dataframe with columns for time, temp, etc.
   map_dfr(
     \(x) {
       tibble(
@@ -187,7 +191,7 @@ forecast <- request(forecast_url) |>
     time = time |> ymd_hms()
   )
 
-# Plot data
+# Plot data using ggplot
 ggplot(forecast, aes(x = time, y = temp_F)) +
   geom_line(color = "blue") +
   labs(title = "Washington DC Temperature",
@@ -196,4 +200,13 @@ ggplot(forecast, aes(x = time, y = temp_F)) +
   theme_minimal()
 ```
 
+***
+## Further reading
 
+* [CS50's Introduction to Programming with R](https://cs50.harvard.edu/r/2024/) (comprehensive introduction to R)
+* [CS50's Web Programming with Python and JavaScript, lecture 5](https://cs50.harvard.edu/web/notes/5/) (good general introduction to APIs and JSON)
+* [JSON formatter](https://jsonformatter.org/) (a web tool to explore JSON data)
+* [IBM - What is a REST API](https://www.youtube.com/watch?v=lsMQRaeKNDk) (good explanation of how web APIs work 'under the hood')
+* Albert Rapp's [How to Get Data From APIs with R & {httr2}](https://www.youtube.com/watch?v=hmtE4QGIOuk) (video tutorial on the httr2 package)
+* [Mozilla Developer - An overview of HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview) (guide to HTTP - the foundation of data exchange over the web)
+* Ross Coron's [inquiRy](https://www.youtube.com/watch?v=BC2qRJJzJlY) and [Parl-i/o](https://www.youtube.com/watch?v=p1dJaElP5GQ) (apps utilising Parliament's APIs)
